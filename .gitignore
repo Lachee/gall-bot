@@ -1,0 +1,10 @@
+node_modules/
+
+#enviroments
+*.env
+*.env-*
+!*.env-sample
+
+#keys
+*.key
+!*.key-sample

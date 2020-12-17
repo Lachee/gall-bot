@@ -1,0 +1,16 @@
+{
+  "name": "gallbot",
+  "version": "1.0.0",
+  "description": "GALL Discord Bot",
+  "main": "index.mjs",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Lachee",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^12.5.1",
+    "dotenv": "^8.2.0",
+    "node-fetch": "^2.6.1"
+  }
+}
