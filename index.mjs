@@ -21,25 +21,42 @@ discord.on('ready', async () => {
 discord.on('message', async (msg) => {
     if (msg.author.bot) return;
 
+    //See if it is a gallery post
+    let gallery = await findGalleryFromMessageIds(msg.id, msg.channel.id);
+    if (gallery != null) {
+        msg.react('🔥');
+        return;
+    }
+
     //Find any URL in the sent message
     const findSimilarURL = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/i;
     const matches = msg.content.match(findSimilarURL);
     if (matches == null) return;
     
-    //Supress the embed for admins
-    msg.suppressEmbeds(true);
+    //Processing indicator
+    const reaction = await msg.react('🕑');
 
     //Submit the message and cache the ids so we dont look it up again
     // We rebuild the URL because we want them to paste without the http
     const url       = (matches[1] ?? 'https://') + matches[2] + matches[3];
-    const gallmsg   = await msg.channel.send(proxyImage(url));
+    const gallmsg   = null; //await msg.channel.send(proxyImage(url));
 
-    const gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
+    //Publish the image and set the results in the cache so in the future we can look it up faster
+    gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
+
     galleryCache.set(msg.id, gallery ? gallery.id : null);
-    galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
+    if (gallmsg != null)
+        galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
 
-    //Send the message
+    //Supress the embed for admins
+    msg.suppressEmbeds(true);
+
+    //Send teh resulting message with the post
     if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
+
+    //Remove the processing indicator
+    await reaction.remove();
+    
 });
 
 /** React to the gall images */
@@ -103,8 +120,10 @@ discord.on('emojiUpdate', async (oldEmoji, emoji) => {
 async function sendGalleryMessage(channel, gallery, editMessage = null) {
     console.log('posting', gallery);
     const img = proxyImage(gallery.cover.origin);
-    const content = `**GALL Post**\n${process.env.GALL_URL}gallery/${gallery.id}/\n${img}`;
-    
+
+    //const content = `**GALL Post**\n${process.env.GALL_URL}gallery/${gallery.id}/\n${img}`;
+    const content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
+        
     let message = null;
     if (editMessage) {
         message = editMessage;
@@ -136,15 +155,7 @@ async function findGalleryFromMessageIds(message_id, channel_id) {
             if (channel) {
                 const message = await channel.messages.fetch(message_id);
                 if (message && message.content) {
-                    let uriIndex = message.content.indexOf(process.env.GALL_URL);
-                    if (uriIndex >= 0) {
-                        //Search from that point onwards for a GALL specific pattern (/gallery/id/)
-                        // If we find a matching gallery, we will fetch it from the API and store that
-                        const subcontent = message.content.substr(uriIndex);
-                        const regex = /gallery\/(\d*)\/?/;
-                        const matches = subcontent.match(regex);
-                        if (matches) gallery = await gall.getGallery(matches[1]);
-                    }
+                    gallery = await findGalleryFromMessageContent(message.content);
                 }
             }
         }
@@ -155,6 +166,21 @@ async function findGalleryFromMessageIds(message_id, channel_id) {
     
     //Finally return the cached value
     return galleryCache.get(message_id);
+}
+
+async function findGalleryFromMessageContent(content) {
+    let uriIndex = content.indexOf(process.env.GALL_URL);
+    if (uriIndex >= 0) {
+        //Search from that point onwards for a GALL specific pattern (/gallery/id/)
+        // If we find a matching gallery, we will fetch it from the API and store that
+        const subcontent = content.substr(uriIndex);
+        const regex = /gallery\/(\d*)\/?/;
+        const matches = subcontent.match(regex);
+        if (!matches) return null;
+        return await gall.getGallery(matches[1]);
+    }
+
+    return null;
 }
 
 discord.login(process.env.BOT_TOKEN);

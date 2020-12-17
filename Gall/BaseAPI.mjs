@@ -43,7 +43,7 @@ export class BaseAPI {
             return false;
         }
         
-        return new Gallery(this, result[url]);
+        return new Gallery(this, result[Object.keys(result)[0]]);
     }
     async findGalleries(query) {
         const results = await this.fetch('GET', '/gallery?q=' + encodeURIComponent(query));
