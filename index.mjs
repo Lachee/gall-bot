@@ -22,7 +22,7 @@ discord.on('message', async (msg) => {
     if (msg.author.bot) return;
 
     //See if it is a gallery post
-    let gallery = await findGalleryFromMessageIds(msg.id, msg.channel.id);
+    let gallery = await findGalleryFromMessageContent(msg.content);
     if (gallery != null) {
         msg.react('🔥');
         return;
@@ -42,20 +42,25 @@ discord.on('message', async (msg) => {
     const gallmsg   = null; //await msg.channel.send(proxyImage(url));
 
     //Publish the image and set the results in the cache so in the future we can look it up faster
-    gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
+    try {
+        gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
 
-    galleryCache.set(msg.id, gallery ? gallery.id : null);
-    if (gallmsg != null)
-        galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
+        galleryCache.set(msg.id, gallery ? gallery.id : null);
+        if (gallmsg != null)
+            galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
 
-    //Supress the embed for admins
-    msg.suppressEmbeds(true);
+        //Supress the embed for admins
+        msg.suppressEmbeds(true);
 
-    //Send teh resulting message with the post
-    if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
+        //Send teh resulting message with the post
+        if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
+    }catch(error) {
+        await msg.react('❌');
+        console.error(error);
+    } finally {
+        await reaction.remove();
+    }
 
-    //Remove the processing indicator
-    await reaction.remove();
     
 });
 
@@ -122,7 +127,7 @@ async function sendGalleryMessage(channel, gallery, editMessage = null) {
     const img = proxyImage(gallery.cover.origin);
 
     //const content = `**GALL Post**\n${process.env.GALL_URL}gallery/${gallery.id}/\n${img}`;
-    const content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
+    const content = `${process.env.GALL_URL}gallery/${gallery.id}/?v=1`;
         
     let message = null;
     if (editMessage) {
