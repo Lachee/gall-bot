@@ -28,6 +28,8 @@ discord.on('message', async (msg) => {
         return;
     }
 
+    //TODO: Convert the multiple urls into one gallery
+
     //Find any URL in the sent message
     const regexp = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/ig;
     let matches;
