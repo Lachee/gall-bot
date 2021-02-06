@@ -29,38 +29,40 @@ discord.on('message', async (msg) => {
     }
 
     //Find any URL in the sent message
-    const findSimilarURL = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/i;
-    const matches = msg.content.match(findSimilarURL);
-    if (matches == null) return;
-    
-    //Processing indicator
-    const reaction = await msg.react('🕑');
+    const regexp = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/ig;
+    let matches;
+    while((matches = regexp.exec(str)) !== null) {
+        const matches = msg.content.match(findSimilarURL);
+        if (matches == null) return;
+        
+        //Processing indicator
+        const reaction = await msg.react('🕑');
 
-    //Submit the message and cache the ids so we dont look it up again
-    // We rebuild the URL because we want them to paste without the http
-    const url       = (matches[1] ?? 'https://') + matches[2] + matches[3];
-    const gallmsg   = null; //await msg.channel.send(proxyImage(url));
+        //Submit the message and cache the ids so we dont look it up again
+        // We rebuild the URL because we want them to paste without the http
+        const url       = (matches[1] ?? 'https://') + matches[2] + matches[3];
+        const gallmsg   = null; //await msg.channel.send(proxyImage(url));
 
-    //Publish the image and set the results in the cache so in the future we can look it up faster
-    try {
-        gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
+        //Publish the image and set the results in the cache so in the future we can look it up faster
+        try {
+            gallery = await gall.actAs(msg.author.id).publish(url, msg.guild.id, msg.channel.id, msg.id);
 
-        galleryCache.set(msg.id, gallery ? gallery.id : null);
-        if (gallmsg != null)
-            galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
+            galleryCache.set(msg.id, gallery ? gallery.id : null);
+            if (gallmsg != null)
+                galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
 
-        //Supress the embed for admins
-        msg.suppressEmbeds(true);
+            //Supress the embed for admins
+            msg.suppressEmbeds(true);
 
-        //Send teh resulting message with the post
-        if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
-    }catch(error) {
-        await msg.react('❌');
-        console.error(error);
-    } finally {
-        await reaction.remove();
+            //Send teh resulting message with the post
+            if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
+        }catch(error) {
+            await msg.react('❌');
+            console.error(error);
+        } finally {
+            await reaction.remove();
+        }
     }
-
     
 });
 
