@@ -32,9 +32,6 @@ discord.on('message', async (msg) => {
     // (disabled for now)
     const gallmsg   = null; //await msg.channel.send(proxyImage(url));
 
-    //Processing indicator
-    const reaction = await msg.react('🕑');
-
     //Find any URL in the sent message
     const regexp = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/ig;
     let matches;
@@ -46,6 +43,18 @@ discord.on('message', async (msg) => {
         const url       = (matches[1] ?? 'https://') + matches[2] + matches[3];
         links.push(url);
     }
+
+    //Add all the attachments
+    msg.attachments.forEach((key, value) => {
+        if (value.url) links.push(value.url);
+    });
+
+    //Nothing left here
+    if (links.length == 0)
+        return;
+
+    //Processing indicator
+    const reaction = await msg.react('🕑');
 
     //Publish the image and set the results in the cache so in the future we can look it up faster
     try {
