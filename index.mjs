@@ -8,6 +8,7 @@ const gall          = new BaseAPI(`${process.env.GALL_URL}api`, process.env.GALL
 const discord       = new Discord.Client();
 const galleryCache  = new Map();
 const userLock = {};
+const ownerId       = process.env.OWNER_ID || '130973321683533824';
 
 discord.settings = new Enmap({
     name: "settings",
@@ -17,10 +18,10 @@ discord.settings = new Enmap({
 });
 
 const defaultSettings = {
-    prefix: "$",
-    postGallery: true,
-    embedGallery: true,
-    supressEmbed: true,
+    prefix: "$",            
+    postGallery: true,//TODO: Impletement this
+    embedGallery: true,//TODO: Impletement this
+    supressEmbed: true,//TODO: Impletement this
     channel: ''
 }
 
@@ -60,14 +61,10 @@ async function processMessageCommand(prefix, message) {
     switch(command) {
         default: break;
         case 'setconf': 
-            // Command is admin only, let's grab the admin value: 
-            const adminRole = message.guild.roles.cache.find("name", guildConf.adminRole);
-            if(!adminRole) return message.reply("Administrator Role Not Found");
-
             // Then we'll exit if the user is not admin
-            if(!message.member.roles.cache.has(adminRole.id)) {
-            return message.reply("You're not an admin, sorry!");
-            }
+            if(!message.author.id != ownerId)
+                await message.reply("You're not the owner, sorry!");
+            
 
             // Let's get our key and value from the arguments. 
             // This is array destructuring, by the way. 
@@ -79,16 +76,16 @@ async function processMessageCommand(prefix, message) {
 
             // We can check that the key exists to avoid having multiple useless, 
             // unused keys in the config:
-            if(!client.settings.has(message.guild.id, prop)) {
-            return message.reply("This key is not in the configuration.");
-            }
+            if(!client.settings.has(message.guild.id, prop))
+                await message.reply("This key is not in the configuration.");
+            
 
             // Now we can finally change the value. Here we only have strings for values 
             // so we won't bother trying to make sure it's the right type and such. 
             client.settings.set(message.guild.id, value.join(" "), prop);
 
             // We can confirm everything's done to the client.
-            message.channel.send(`Guild configuration item ${prop} has been changed to:\n\`${value.join(" ")}\``);
+            await message.channel.send(`Guild configuration item ${prop} has been changed to:\n\`${value.join(" ")}\``);
             break;
     }
 }
