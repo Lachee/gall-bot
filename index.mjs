@@ -1,11 +1,12 @@
 import dotenv from 'dotenv'; dotenv.config();   // Load Enviroment
 import { BaseAPI } from './Gall/BaseAPI.mjs';
-import Discord from 'discord.js';               // The discord client
+import Discord, { ReactionUserManager } from 'discord.js';               // The discord client
 import { Gallery } from './Gall/Types.mjs';
 
 const gall          = new BaseAPI(`${process.env.GALL_URL}api`, process.env.GALL_TOKEN);
 const discord       = new Discord.Client();
 const galleryCache  = new Map();
+const userLock = {};
 
 /** When the bot is first ready, lets try and publish all the guilds we are in */
 discord.on('ready', async () => {
@@ -28,6 +29,15 @@ discord.on('message', async (msg) => {
         return;
     }
 
+    /** Lock the user, we dont want to parse them while they are doing stuff.
+     * This is mostly because we get dupe events otherwise.
+     */
+    if (userLock[msg.author.id]) return;
+    userLock[msg.author.id] = true;
+
+    //Processing indicator
+    const reaction = await msg.react('🕑');
+
     //The original message the bot set last time
     // (disabled for now)
     const gallmsg   = null; //await msg.channel.send(proxyImage(url));
@@ -45,18 +55,44 @@ discord.on('message', async (msg) => {
     }
 
     //Add all the attachments
+    let hasAtLeastOneAttachment = false;
     msg.attachments.forEach((key, value) => {
+        hasAtLeastOneAttachment = true;
         links.push(key.url);
     });
 
-    console.log('length', links, links.length);
+    //Wait for more attachments
+    if (hasAtLeastOneAttachment) {
+        try {
+            await new Promise((resolve, reject) => {
+                let timeout = setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 2500);
+                let listener = (message) => {
+                    if (message.author.id === msg.author.id) {
+                        if (message.attachments.size > 0) {
+                            message.attachments.forEach((key, value) => { links.push(key.url); });                  //Push the URL
+                            setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 1000);     //Reset the timeout
+                        } else {
+                            discord.removeListener(listener);
+                            resolve();
+                        }
+                    }
+                }
+                discord.on('message', listener);
+            });
+        }catch(e) {
+            /** do nothing, we dont care we failed */
+        }
+    }
+
+    //We done now, abort the lock
+    userLock[msg.author.id] = false;
 
     //Nothing left here
-    if (links.length == 0)
+    if (links.length == 0) {
+        await reaction.remove();
         return;
+    }
 
-    //Processing indicator
-    const reaction = await msg.react('🕑');
 
     //Publish the image and set the results in the cache so in the future we can look it up faster
     try {
