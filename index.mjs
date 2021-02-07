@@ -46,8 +46,10 @@ discord.on('message', async (msg) => {
 
     //Add all the attachments
     msg.attachments.forEach((key, value) => {
-        if (value.url) links.push(value.url);
+        links.push(key.url);
     });
+
+    console.log('length', links, links.length);
 
     //Nothing left here
     if (links.length == 0)
