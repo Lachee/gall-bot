@@ -28,11 +28,12 @@ export class BaseAPI {
         }
     }
 
-    /** Publishes a URL */
-    async publish(url, guild_id = null, channel_id = null, message_id = null) {
+    /** Publishes the passed URL / URLs */
+    async publish(url, guild_id = null, channel_id = null, message_id = null, title = null) {
         console.log('publishing gallery');
         const result = await this.fetch('POST', `/gallery`, { 
             url:        url,
+            title:      title,
             guild_id:   guild_id,
             channel_id: channel_id,
             message_id: message_id,
