@@ -9,8 +9,10 @@
   "author": "Lachee",
   "license": "MIT",
   "dependencies": {
+    "better-sqlite-pool": "^0.3.0",
     "discord.js": "^12.5.1",
     "dotenv": "^8.2.0",
+    "enmap": "^5.8.4",
     "node-fetch": "^2.6.1"
   }
 }
