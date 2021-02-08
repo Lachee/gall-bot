@@ -51,20 +51,21 @@ discord.on('ready', async () => {
 
 /** When we have a message, look for links on the message */
 discord.on('message', async (msg) => {
-    //Skip bort
+
+    //Bots are naughty, i dont like em
     if(msg.author.bot) return;
 
-    const conf = discord.settings.ensure(msg.guild.id, defaultSettings);
     if (msg.guild != null) {
-        //Process a command
+        //Prepare the conf and process any commands
+        const conf = discord.settings.ensure(msg.guild.id, defaultSettings);
         if (msg.content.indexOf(conf.prefix) === 0) {
             await processMessageCommand(conf.prefix, msg);
             return;
         }
     }
 
-    //Process image uploads
-    if (msg.channel.id == conf.channel) {
+    //Process image uploads if its a DM or its the correct cohannel
+    if (msg.guild == null || msg.channel.id == discord.settings.set(message.guild.id, 'channel')) {
         await processMessageUpload(msg);
         return;
     }
@@ -188,19 +189,21 @@ async function processMessageUpload(msg) {
         if (reaction != null) reaction = await msg.react('🕑');
 
         //Publish the image and set the results in the cache so in the future we can look it up faster
-        gallery = await gall.actAs(msg.author.id).publish(links, msg.guild.id, msg.channel.id, msg.id);
+        if (msg.guild)  gallery = await gall.actAs(msg.author.id).publish(links, msg.guild.id, msg.channel.id, msg.id);
+        else            gallery = await gall.actAs(msg.author.id).publish(links);
 
         //Store previous messages
         for(let i in messages) 
             galleryMessages.set("messages", messages[i].id, gallery ? gallery.id : null);
 
         //Supress the embed for admins
-        if (discord.settings.get(msg.guild.id, 'supressEmbeds'))
+        if (msg.guild != null && discord.settings.get(msg.guild.id, 'supressEmbeds'))
             msg.suppressEmbeds(true);
 
         //Attempt to post the gallery message
-        if (gallery && discord.settings.get(msg.guild.id, 'postGallery')) {
+        if (gallery && (msg.guild == null || discord.settings.get(msg.guild.id, 'postGallery'))) {
             await postGallery(msg.channel, gallery);
+
         } else {
             await msg.react('🔥');
         }
@@ -282,7 +285,7 @@ async function postGallery(channel, gallery) {
 
     let content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
     
-    if (!discord.settings.get(channel.guild.id, 'embedGallery'))
+    if (!channel.guild || !discord.settings.get(channel.guild.id, 'embedGallery'))
         content = `<${content}>`;
 
     //Post a new image
