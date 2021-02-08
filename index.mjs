@@ -4,11 +4,25 @@ import Discord, { ReactionUserManager } from 'discord.js';               // The 
 import { Gallery } from './Gall/Types.mjs';
 import  Enmap from 'enmap';
 
+/*
+TODO:
+    - a mode where it just links a gallery
+    - store the original image -> gallery link so i can listen to those reactions
+    - tidy code so the processing is in a neater section and generic
+    - Handle DMS. That should also upload
+*/
+
 const gall          = new BaseAPI(`${process.env.GALL_URL}api`, process.env.GALL_TOKEN);
 const discord       = new Discord.Client();
-const galleryCache  = new Map();
 const userLock = {};
 const ownerId       = process.env.OWNER_ID || '130973321683533824';
+
+const galleryMessages  = new Enmap({
+    name: "galleries",
+    fetchAll: true,
+    autoFetch: true,
+    cloneLevel: 'deep'
+});
 
 discord.settings = new Enmap({
     name: "settings",
@@ -19,9 +33,8 @@ discord.settings = new Enmap({
 
 const defaultSettings = {
     prefix: "$",            
-    postGallery: true,//TODO: Impletement this
-    embedGallery: true,//TODO: Impletement this
-    supressEmbed: true,//TODO: Impletement this
+    postGallery: true,
+    embedGallery: true,
     channel: ''
 }
 
@@ -37,14 +50,16 @@ discord.on('ready', async () => {
 
 /** When we have a message, look for links on the message */
 discord.on('message', async (msg) => {
-    if(!message.guild || message.author.bot) return;
+    //Skip bort
+    if(msg.author.bot) return;
 
-    
-    //Process a command
-    const conf = discord.settings.ensure(member.guild.id, defaultSettings);
-    if (msg.content.indexOf(config.prefix) === 0) {
-        await processMessageCommand(conf.prefix, msg);
-        return;
+    const conf = discord.settings.ensure(msg.guild.id, defaultSettings);
+    if (msg.guild != null) {
+        //Process a command
+        if (msg.content.indexOf(conf.prefix) === 0) {
+            await processMessageCommand(conf.prefix, msg);
+            return;
+        }
     }
 
     //Process image uploads
@@ -62,8 +77,10 @@ async function processMessageCommand(prefix, message) {
         default: break;
         case 'setconf': 
             // Then we'll exit if the user is not admin
-            if(!message.author.id != ownerId)
+            if(message.author.id != ownerId) {
                 await message.reply("You're not the owner, sorry!");
+                return;
+            }
             
 
             // Let's get our key and value from the arguments. 
@@ -76,13 +93,13 @@ async function processMessageCommand(prefix, message) {
 
             // We can check that the key exists to avoid having multiple useless, 
             // unused keys in the config:
-            if(!client.settings.has(message.guild.id, prop))
+            if(!discord.settings.has(message.guild.id, prop))
                 await message.reply("This key is not in the configuration.");
             
 
             // Now we can finally change the value. Here we only have strings for values 
             // so we won't bother trying to make sure it's the right type and such. 
-            client.settings.set(message.guild.id, value.join(" "), prop);
+            discord.settings.set(message.guild.id, value.join(" "), prop);
 
             // We can confirm everything's done to the client.
             await message.channel.send(`Guild configuration item ${prop} has been changed to:\n\`${value.join(" ")}\``);
@@ -93,37 +110,35 @@ async function processMessageCommand(prefix, message) {
 /** Processes a message and try to upload any images found in it */
 async function processMessageUpload(msg) {
 
-    //See if it is a gallery post
+    //See if it is a gallery post.
+    // If so, then we will just react and then continue on. No need to process it twice.
+    // (this is if they directly post a https://gall.lu.je/gallery/ post)
     let gallery = await findGalleryFromMessageContent(msg.content);
     if (gallery != null) {
         msg.react('🔥');
         return;
     }
 
-    /** Lock the user, we dont want to parse them while they are doing stuff.
-     * This is mostly because we get dupe events otherwise.
-     */
+    //Do not process this message if the user is already being processed.
+    // This is required for the attachment collection later on.
     if (userLock[msg.author.id]) return;
     userLock[msg.author.id] = true;
 
     //Processing indicator
     const reaction = await msg.react('🕑');
 
-    //The original message the bot set last time
-    // (disabled for now)
-    const gallmsg   = null; //await msg.channel.send(proxyImage(url));
-
-    //Find any URL in the sent message
+    //Find any links
     const regexp = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/ig;
     let matches;
     let links = [];
-    while((matches = regexp.exec(msg.content)) !== null) {
-        
-        //Submit the message and cache the ids so we dont look it up again
-        // We rebuild the URL because we want them to paste without the http
-        const url       = (matches[1] ?? 'https://') + matches[2] + matches[3];
-        links.push(url);
-    }
+    while((matches = regexp.exec(msg.content)) !== null)
+        links.push((matches[1] ?? 'https://') + matches[2] + matches[3]);
+    
+
+    //Prepare a list of messages that were used to trigger this.
+    // We will allow the user to react to any one of these. 
+    // There is multiple because of the attachment listener
+    let messages = [ msg ];
 
     //Add all the attachments
     let hasAtLeastOneAttachment = false;
@@ -139,9 +154,10 @@ async function processMessageUpload(msg) {
                 let timeout = setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 2500);
                 let listener = (message) => {
                     if (message.author.id === msg.author.id) {
-                        if (message.attachments.size > 0) {
+                        if (message.attachments.size > 0 && message.channel.id == msg.channel.id) {
                             message.attachments.forEach((key, value) => { links.push(key.url); });                  //Push the URL
                             setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 1000);     //Reset the timeout
+                            messages.push(message);
                         } else {
                             discord.removeListener(listener);
                             resolve();
@@ -164,27 +180,36 @@ async function processMessageUpload(msg) {
         return;
     }
 
-
-    //Publish the image and set the results in the cache so in the future we can look it up faster
     try {
+        //Publish the image and set the results in the cache so in the future we can look it up faster
         gallery = await gall.actAs(msg.author.id).publish(links, msg.guild.id, msg.channel.id, msg.id);
 
-        galleryCache.set(msg.id, gallery ? gallery.id : null);
-        if (gallmsg != null)
-            galleryCache.set(gallmsg.id, gallery ? gallery.id : null);
+        //Store previous messages
+        for(let i in messages) 
+            galleryMessages.set("messages", messages[i].id, gallery ? gallery.id : null);
 
         //Supress the embed for admins
         msg.suppressEmbeds(true);
 
-        //Send teh resulting message with the post
-        if (gallery) await sendGalleryMessage(msg.channel, gallery, gallmsg);
+        //Attempt to post the gallery message
+        if (gallery && discord.settings.get(msg.guild.id, 'postGallery')) {
+            await postGallery(msg.channel, gallery);
+        } else {
+            await msg.react('🔥');
+        }
+        
     }catch(error) {
+        
+        //We failed to upload
         await msg.react('❌');
-        console.error(error);
-    } finally {
-        await reaction.remove();
-    }
+        console.error('Upload Failure', error);
     
+    } finally {
+    
+        //Finally remove the reaction
+        await reaction.remove();
+    
+    }
 }
 
 /** React to the gall images */
@@ -200,7 +225,7 @@ discord.on('raw', async (packet) => {
         
         //Set who we are acting as and check the galleries
         gall.actAs(reactionEvent.user_id);
-        let gallery = await findGalleryFromMessageIds(reactionEvent.message_id, reactionEvent.channel_id);
+        let gallery = await findGallery(reactionEvent.message_id, reactionEvent.channel_id);
         if (gallery == null) return;
         
         //If its a fire, then we will do seperate things
@@ -241,44 +266,44 @@ discord.on('emojiUpdate', async (oldEmoji, emoji) => {
     });
 });
 
-/**
+/** Sends the gallery in the given channel
  * @param {Discord.TextChannel} channel the discord channel
  * @param {Gallery} gallery the gallery
  */
-async function sendGalleryMessage(channel, gallery, editMessage = null) {
+async function postGallery(channel, gallery) {
     console.log('posting', gallery);
-    const img = proxyImage(gallery.cover.origin);
 
-    //const content = `**GALL Post**\n${process.env.GALL_URL}gallery/${gallery.id}/\n${img}`;
-    const content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
-        
-    let message = null;
-    if (editMessage) {
-        message = editMessage;
-        await editMessage.edit(content);
-    } else {
-        message = await channel.send(content);
-    }
+    let content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
+    
+    if (!discord.settings.get(channel.guild.id, 'embedGallery'))
+        content = `<${content}>`;
+
+    //Post a new image
+    let message = await channel.send(content);
     message.react('🔥');
+
+    //Store it in the cache
+    galleryMessages.set("messages", message.id, gallery.id);
+
+    //Return the message
     return message;
 }
 
-function proxyImage(url) {
-    return process.env.GALL_URL + "api/proxy?url=" + encodeURIComponent(url);
-}
 
-/** Finds a gallery from the given message and channel ids */
-async function findGalleryFromMessageIds(message_id, channel_id) {
-    if (!galleryCache.has(message_id)) {
+/** Finds a gallery from the given message id. If the message isn't cached, the it will be found using the given channel id. */
+async function findGallery(message_id, channel_id) {
+
+    //If its not in the cache, lets see if we can find it from the API
+    if (!galleryMessages.has("messages", message_id)) {
         let gallery = null;
-
-        //Search for the galleries
+        
+        //Find the galleries in the API
         const galleries = await gall.findGalleries(message_id);
         if (galleries.length > 0) {
             gallery = galleries[0];
         } else {
             
-            //Lets see if it has an appropriate regex
+            //Find the gallery from the message content
             const channel = await discord.channels.fetch(channel_id);
             if (channel) {
                 const message = await channel.messages.fetch(message_id);
@@ -289,13 +314,16 @@ async function findGalleryFromMessageIds(message_id, channel_id) {
         }
 
         //Set the cache
-        galleryCache.set(message_id, gallery);
+        galleryMessages.set("messages", message_id, gallery.id);
+        return gallery;
     }
     
     //Finally return the cached value
-    return galleryCache.get(message_id);
+    const galleryId = galleryMessages.get("messages", message_id);
+    return await gall.getGallery(galleryId);
 }
 
+/** Finds a gallery from the given content, looking for existing GALL urls */
 async function findGalleryFromMessageContent(content) {
     let uriIndex = content.indexOf(process.env.GALL_URL);
     if (uriIndex >= 0) {

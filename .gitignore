@@ -8,3 +8,6 @@ node_modules/
 #keys
 *.key
 !*.key-sample
+
+# SQLite data
+/data
