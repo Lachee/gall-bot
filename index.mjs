@@ -65,7 +65,7 @@ discord.on('message', async (msg) => {
     }
 
     //Process image uploads if its a DM or its the correct cohannel
-    if (msg.guild == null || msg.channel.id == discord.settings.set(message.guild.id, 'channel')) {
+    if (msg.guild == null || msg.channel.id == discord.settings.get(msg.guild.id, 'channel')) {
         await processMessageUpload(msg);
         return;
     }
