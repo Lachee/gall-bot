@@ -35,6 +35,7 @@ const defaultSettings = {
     prefix: "$",            
     postGallery: true,
     embedGallery: true,
+    supressEmbeds: true,
     channel: ''
 }
 
@@ -194,7 +195,8 @@ async function processMessageUpload(msg) {
             galleryMessages.set("messages", messages[i].id, gallery ? gallery.id : null);
 
         //Supress the embed for admins
-        msg.suppressEmbeds(true);
+        if (discord.settings.get(msg.guild.id, 'supressEmbeds'))
+            msg.suppressEmbeds(true);
 
         //Attempt to post the gallery message
         if (gallery && discord.settings.get(msg.guild.id, 'postGallery')) {
