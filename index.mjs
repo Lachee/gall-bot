@@ -124,8 +124,6 @@ async function processMessageUpload(msg) {
     if (userLock[msg.author.id]) return;
     userLock[msg.author.id] = true;
 
-    //Processing indicator
-    const reaction = await msg.react('🕑');
 
     //Find any links
     const regexp = /(https?:\/\/)?([-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b)([-a-zA-Z0-9()@:%_\+.~#?&\/\/=]*)?/ig;
@@ -134,6 +132,8 @@ async function processMessageUpload(msg) {
     while((matches = regexp.exec(msg.content)) !== null)
         links.push((matches[1] ?? 'https://') + matches[2] + matches[3]);
     
+    //Waiting reaction
+    let reaction = null;
 
     //Prepare a list of messages that were used to trigger this.
     // We will allow the user to react to any one of these. 
@@ -150,6 +150,8 @@ async function processMessageUpload(msg) {
     //Wait for more attachments
     if (hasAtLeastOneAttachment) {
         try {
+            //Processing indicator
+            if (reaction != null) reaction = await msg.react('🕑');
             await new Promise((resolve, reject) => {
                 let timeout = setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 2500);
                 let listener = (message) => {
@@ -176,11 +178,14 @@ async function processMessageUpload(msg) {
 
     //Nothing left here
     if (links.length == 0) {
-        await reaction.remove();
+        if (reaction != null) await reaction.remove();
         return;
     }
 
     try {
+        //Processing indicator
+        if (reaction != null) reaction = await msg.react('🕑');
+
         //Publish the image and set the results in the cache so in the future we can look it up faster
         gallery = await gall.actAs(msg.author.id).publish(links, msg.guild.id, msg.channel.id, msg.id);
 
@@ -207,7 +212,7 @@ async function processMessageUpload(msg) {
     } finally {
     
         //Finally remove the reaction
-        await reaction.remove();
+        if (reaction != null) await reaction.remove();
     
     }
 }
