@@ -53,7 +53,8 @@ discord.settings = new Enmap({
 });
 
 const defaultSettings = {
-    prefix: "$",            
+    prefix: "$",
+    flameReact: true,
     postGallery: true,
     embedGallery: true,
     supressEmbeds: true,
@@ -226,7 +227,8 @@ async function processMessageUpload(msg) {
             await postGallery(msg.channel, gallery);
 
         } else {
-            await msg.react('🔥');
+            if (!channel.guild || discord.settings.get(channel.guild.id, 'flameReact'))
+                await message.react('🔥');
         }
         
     }catch(error) {
@@ -311,7 +313,9 @@ async function postGallery(channel, gallery) {
 
     //Post a new image
     let message = await channel.send(content);
-    message.react('🔥');
+
+    if (!channel.guild || discord.settings.get(channel.guild.id, 'flameReact'))
+        message.react('🔥');
 
     //Store it in the cache
     galleryMessages.set("messages", message.id, gallery.id);
