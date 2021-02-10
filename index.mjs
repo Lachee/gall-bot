@@ -3,6 +3,27 @@ import { BaseAPI } from './Gall/BaseAPI.mjs';
 import Discord, { ReactionUserManager } from 'discord.js';               // The discord client
 import { Gallery } from './Gall/Types.mjs';
 import  Enmap from 'enmap';
+import log4js from 'log4js';
+
+log4js.configure({
+    appenders: { 
+        file: { 
+            type: "file", 
+            filename: "bot.log"
+        },
+        console: {
+            type: 'console' ,
+        }
+    },
+    categories: { 
+        default: { 
+            appenders: ["console", "file"], 
+            level: "debug" 
+        } 
+    }
+});
+
+const logger = log4js.getLogger("default");
 
 /*
 TODO:
@@ -12,7 +33,7 @@ TODO:
     - Handle DMS. That should also upload
 */
 
-const gall          = new BaseAPI(`${process.env.GALL_URL}api`, process.env.GALL_TOKEN);
+const gall          = new BaseAPI(`${process.env.GALL_URL}api`, process.env.GALL_TOKEN, logger);
 const discord       = new Discord.Client();
 const userLock = {};
 const ownerId       = process.env.OWNER_ID || '130973321683533824';
@@ -41,7 +62,7 @@ const defaultSettings = {
 
 /** When the bot is first ready, lets try and publish all the guilds we are in */
 discord.on('ready', async () => {
-    console.log('bot is ready 🤖');
+    logger.debug('bot is ready 🤖');
     for(let k of discord.guilds.cache) {
         const emojis = k[1].emojis.cache.array();
         const result = await gall.updateGuild(k[0], k[1].name, emojis);
@@ -281,7 +302,7 @@ discord.on('emojiUpdate', async (oldEmoji, emoji) => {
  * @param {Gallery} gallery the gallery
  */
 async function postGallery(channel, gallery) {
-    console.log('posting', gallery);
+    logger.debug('posting', gallery);
 
     let content = `${process.env.GALL_URL}gallery/${gallery.id}/`;
     
