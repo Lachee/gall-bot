@@ -163,7 +163,7 @@ async function processMessageUpload(msg) {
                             setTimeout(() => { clearTimeout(timeout); reject(`Exceeded time limit.`); }, 1000);     //Reset the timeout
                             messages.push(message);
                         } else {
-                            discord.removeListener(listener);
+                            discord.removeListener('message', listener);
                             resolve();
                         }
                     }
