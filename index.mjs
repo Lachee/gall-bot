@@ -222,7 +222,7 @@ async function processMessageUpload(msg) {
             msg.suppressEmbeds(true);
 
         //Attempt to post the gallery message
-        if (gallery && (msg.guild == null || discord.settings.get(msg.guild.id, 'postGallery'))) {
+        if (gallery && (msg.guild == null)) { // || discord.settings.get(msg.guild.id, 'postGallery'))) {
             await postGallery(msg.channel, gallery);
 
         } else {
@@ -232,7 +232,7 @@ async function processMessageUpload(msg) {
     }catch(error) {
         
         //We failed to upload
-        await msg.react('❌');
+        //await msg.react('❌');
         console.error('Upload Failure', error);
     
     } finally {
